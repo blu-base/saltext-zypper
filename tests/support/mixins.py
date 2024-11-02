@@ -8,6 +8,8 @@
     Some reusable class Mixins
 """
 
+# pylint: disable=C0103
+
 import atexit
 import copy
 import functools
@@ -21,8 +23,6 @@ import tempfile
 import time
 import xml.etree.ElementTree as etree
 
-from saltfactories.utils import random_string
-
 import salt.config
 import salt.exceptions
 import salt.utils.event
@@ -35,8 +35,10 @@ import salt.utils.yaml
 import salt.version
 from salt.utils.immutabletypes import freeze
 from salt.utils.verify import verify_env
+from saltfactories.utils import random_string
+
+from tests.support.loader import LoaderModuleMock
 from tests.support.paths import CODE_DIR
-from tests.support.pytest.loader import LoaderModuleMock
 from tests.support.runtests import RUNTIME_VARS
 
 log = logging.getLogger(__name__)
@@ -81,9 +83,7 @@ class AdaptedConfigurationTestCaseMixin:
 
     @staticmethod
     def get_temp_config(config_for, **config_overrides):
-        rootdir = config_overrides.get(
-            "root_dir", tempfile.mkdtemp(dir=RUNTIME_VARS.TMP)
-        )
+        rootdir = config_overrides.get("root_dir", tempfile.mkdtemp(dir=RUNTIME_VARS.TMP))
         if not os.path.exists(rootdir):
             os.makedirs(rootdir)
         conf_dir = config_overrides.pop("conf_dir", os.path.join(rootdir, "conf"))
@@ -96,13 +96,11 @@ class AdaptedConfigurationTestCaseMixin:
             config_overrides["user"] = RUNTIME_VARS.RUNNING_TESTS_USER
         config_overrides["root_dir"] = rootdir
 
-        cdict = AdaptedConfigurationTestCaseMixin.get_config(
-            config_for, from_scratch=True
-        )
+        cdict = AdaptedConfigurationTestCaseMixin.get_config(config_for, from_scratch=True)
 
         if config_for in ("master", "client_config"):
             rdict = salt.config.apply_master_config(config_overrides, cdict)
-        if config_for == "minion":
+        elif config_for == "minion":
             minion_id = (
                 config_overrides.get("id")
                 or config_overrides.get("minion_id")
@@ -114,6 +112,8 @@ class AdaptedConfigurationTestCaseMixin:
             rdict = salt.config.apply_minion_config(
                 config_overrides, cdict, cache_minion_id=False, minion_id=minion_id
             )
+        else:
+            raise ValueError('config_for is not in ["master", "client_config", "minion"]')
 
         verify_env(
             [
@@ -166,28 +166,20 @@ class AdaptedConfigurationTestCaseMixin:
             if config_for in ("master", "syndic_master", "mm_master", "mm_sub_master"):
                 RUNTIME_VARS.RUNTIME_CONFIGS[config_for] = freeze(
                     salt.config.master_config(
-                        AdaptedConfigurationTestCaseMixin.get_config_file_path(
-                            config_for
-                        )
+                        AdaptedConfigurationTestCaseMixin.get_config_file_path(config_for)
                     )
                 )
             elif config_for in ("minion", "sub_minion"):
                 RUNTIME_VARS.RUNTIME_CONFIGS[config_for] = freeze(
                     salt.config.minion_config(
-                        AdaptedConfigurationTestCaseMixin.get_config_file_path(
-                            config_for
-                        )
+                        AdaptedConfigurationTestCaseMixin.get_config_file_path(config_for)
                     )
                 )
             elif config_for in ("syndic",):
                 RUNTIME_VARS.RUNTIME_CONFIGS[config_for] = freeze(
                     salt.config.syndic_config(
-                        AdaptedConfigurationTestCaseMixin.get_config_file_path(
-                            config_for
-                        ),
-                        AdaptedConfigurationTestCaseMixin.get_config_file_path(
-                            "minion"
-                        ),
+                        AdaptedConfigurationTestCaseMixin.get_config_file_path(config_for),
+                        AdaptedConfigurationTestCaseMixin.get_config_file_path("minion"),
                     )
                 )
             elif config_for == "client_config":
@@ -281,14 +273,12 @@ class SaltClientTestCaseMixin(AdaptedConfigurationTestCaseMixin):
     @property
     def client(self):
         # Late import
-        import salt.client
+        import salt.client  # pylint: disable=C0415
 
         if "runtime_client" not in RUNTIME_VARS.RUNTIME_CONFIGS:
-            mopts = self.get_config(
-                self._salt_client_config_file_name_, from_scratch=True
-            )
-            RUNTIME_VARS.RUNTIME_CONFIGS["runtime_client"] = (
-                salt.client.get_local_client(mopts=mopts)
+            mopts = self.get_config(self._salt_client_config_file_name_, from_scratch=True)
+            RUNTIME_VARS.RUNTIME_CONFIGS["runtime_client"] = salt.client.get_local_client(
+                mopts=mopts
             )
         return RUNTIME_VARS.RUNTIME_CONFIGS["runtime_client"]
 
@@ -300,7 +290,8 @@ class ShellCaseCommonTestsMixin(CheckShellBinaryNameAndVersionMixin):
     def test_salt_with_git_version(self):
         if getattr(self, "_call_binary_", None) is None:
             self.skipTest("'_call_binary_' not defined.")
-        from salt.version import SaltStackVersion, __version_info__
+        from salt.version import SaltStackVersion  # pylint: disable=C0415
+        from salt.version import __version_info__  # pylint: disable=C0415
 
         git = salt.utils.path.which("git")
         if not git:
@@ -313,15 +304,15 @@ class ShellCaseCommonTestsMixin(CheckShellBinaryNameAndVersionMixin):
         if not salt.utils.platform.is_windows():
             opts["close_fds"] = True
         # Let's get the output of git describe
-        process = subprocess.Popen(
+        with subprocess.Popen(
             [git, "describe", "--tags", "--first-parent", "--match", "v[0-9]*"], **opts
-        )
-        out, err = process.communicate()
-        if process.returncode != 0:
-            process = subprocess.Popen(
-                [git, "describe", "--tags", "--match", "v[0-9]*"], **opts
-            )
+        ) as process:
             out, err = process.communicate()
+            if process.returncode != 0:
+                with subprocess.Popen(
+                    [git, "describe", "--tags", "--match", "v[0-9]*"], **opts
+                ) as process:
+                    out, err = process.communicate()
         if not out:
             self.skipTest(
                 "Failed to get the output of 'git describe'. Error: '{}'".format(
@@ -370,9 +361,7 @@ class _FixLoaderModuleMockMixinMroOrder(type):
         instance = super().__new__(mcs, cls_name, tuple(bases), cls_dict)
 
         # Apply our setUp function decorator
-        instance.setUp = LoaderModuleMockMixin.__setup_loader_modules_mocks__(
-            instance.setUp
-        )
+        instance.setUp = LoaderModuleMockMixin.__setup_loader_modules_mocks__(instance.setUp)
         return instance
 
 
@@ -394,9 +383,7 @@ class LoaderModuleMockMixin(metaclass=_FixLoaderModuleMockMixinMroOrder):
                     "{}.setup_loader_modules() must return a dictionary where the keys"
                     " are the modules that require loader mocking setup and the values,"
                     " the global module variables for each of the module being mocked."
-                    " For example '__salt__', '__opts__', etc.".format(
-                        self.__class__.__name__
-                    )
+                    " For example '__salt__', '__opts__', etc.".format(self.__class__.__name__)
                 )
 
             mocker = LoaderModuleMock(loader_modules_configs)
@@ -408,9 +395,7 @@ class LoaderModuleMockMixin(metaclass=_FixLoaderModuleMockMixinMroOrder):
 
     def setup_loader_modules(self):
         raise NotImplementedError(
-            "'{}.setup_loader_modules()' must be implemented".format(
-                self.__class__.__name__
-            )
+            f"'{self.__class__.__name__}.setup_loader_modules()' must be implemented"
         )
 
 
@@ -441,19 +426,15 @@ class SaltReturnAssertsMixin:
     def assertReturnSaltType(self, ret):
         try:
             self.assertTrue(isinstance(ret, dict))
-        except AssertionError:
-            raise AssertionError(
-                f"{type(ret).__name__} is not dict. Salt returned: {ret}"
-            )
+        except AssertionError as exc:
+            raise AssertionError(f"{type(ret).__name__} is not dict. Salt returned: {ret}") from exc
 
     def assertReturnNonEmptySaltType(self, ret):
         self.assertReturnSaltType(ret)
         try:
             self.assertNotEqual(ret, {})
-        except AssertionError:
-            raise AssertionError(
-                "{} is equal to {}. Salt returned an empty dictionary."
-            )
+        except AssertionError as exc:
+            raise AssertionError("{} is equal to {}. Salt returned an empty dictionary.") from exc
 
     def __return_valid_keys(self, keys):
         if isinstance(keys, tuple):
@@ -475,21 +456,21 @@ class SaltReturnAssertsMixin:
             okeys = keys[:]
             try:
                 ret_item = part[okeys.pop(0)]
-            except (KeyError, TypeError):
+            except (KeyError, TypeError) as exc:
                 raise AssertionError(
                     "Could not get ret{} from salt's return: {}".format(
                         "".join([f"['{k}']" for k in keys]), part
                     )
-                )
+                ) from exc
             while okeys:
                 try:
                     ret_item = ret_item[okeys.pop(0)]
-                except (KeyError, TypeError):
+                except (KeyError, TypeError) as exc:
                     raise AssertionError(
                         "Could not get ret{} from salt's return: {}".format(
                             "".join([f"['{k}']" for k in keys]), part
                         )
-                    )
+                    ) from exc
             ret_data.append(ret_item)
         return ret_data
 
@@ -497,50 +478,48 @@ class SaltReturnAssertsMixin:
         try:
             for saltret in self.__getWithinSaltReturn(ret, "result"):
                 self.assertTrue(saltret)
-        except AssertionError:
+        except AssertionError as exc:
             log.info("Salt Full Return:\n%s", pprint.pformat(ret))
             try:
                 raise AssertionError(
                     "{result} is not True. Salt Comment:\n{comment}".format(
                         **(next(iter(ret.values())))
                     )
-                )
-            except (AttributeError, IndexError):
+                ) from exc
+            except (AttributeError, IndexError) as exc:
                 raise AssertionError(
-                    "Failed to get result. Salt Returned:\n{}".format(
-                        pprint.pformat(ret)
-                    )
-                )
+                    f"Failed to get result. Salt Returned:\n{pprint.pformat(ret)}"
+                ) from exc
 
     def assertSaltFalseReturn(self, ret):
         try:
             for saltret in self.__getWithinSaltReturn(ret, "result"):
                 self.assertFalse(saltret)
-        except AssertionError:
+        except AssertionError as exc:
             log.info("Salt Full Return:\n%s", pprint.pformat(ret))
             try:
                 raise AssertionError(
                     "{result} is not False. Salt Comment:\n{comment}".format(
                         **(next(iter(ret.values())))
                     )
-                )
-            except (AttributeError, IndexError):
-                raise AssertionError(f"Failed to get result. Salt Returned: {ret}")
+                ) from exc
+            except (AttributeError, IndexError) as exc:
+                raise AssertionError(f"Failed to get result. Salt Returned: {ret}") from exc
 
     def assertSaltNoneReturn(self, ret):
         try:
             for saltret in self.__getWithinSaltReturn(ret, "result"):
                 self.assertIsNone(saltret)
-        except AssertionError:
+        except AssertionError as exc:
             log.info("Salt Full Return:\n%s", pprint.pformat(ret))
             try:
                 raise AssertionError(
                     "{result} is not None. Salt Comment:\n{comment}".format(
                         **(next(iter(ret.values())))
                     )
-                )
-            except (AttributeError, IndexError):
-                raise AssertionError(f"Failed to get result. Salt Returned: {ret}")
+                ) from exc
+            except (AttributeError, IndexError) as exc:
+                raise AssertionError(f"Failed to get result. Salt Returned: {ret}") from exc
 
     def assertInSaltComment(self, in_comment, ret):
         for saltret in self.__getWithinSaltReturn(ret, "comment"):
@@ -596,9 +575,7 @@ def _fetch_events(q, opts):
             queue_item.task_done()
 
     atexit.register(_clean_queue)
-    with salt.utils.event.get_event(
-        "minion", sock_dir=opts["sock_dir"], opts=opts
-    ) as event:
+    with salt.utils.event.get_event("minion", sock_dir=opts["sock_dir"], opts=opts) as event:
 
         # Wait for event bus to be connected
         while not event.connect_pull(30):

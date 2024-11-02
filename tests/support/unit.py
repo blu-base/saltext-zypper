@@ -19,9 +19,6 @@
     .. _`unittest2`: https://pypi.python.org/pypi/unittest2
 """
 
-# pylint: disable=unused-import,blacklisted-module,deprecated-method
-
-
 import inspect
 import logging
 import os
@@ -33,8 +30,8 @@ from unittest import TestResult
 from unittest import TestSuite as _TestSuite
 from unittest import TextTestResult as _TextTestResult
 from unittest import TextTestRunner as _TextTestRunner
-from unittest import expectedFailure, skip, skipIf
-from unittest.case import SkipTest, _id
+from unittest import expectedFailure
+from unittest import skipIf
 
 try:
     import psutil
@@ -64,12 +61,9 @@ Sed quis posuere urna."""
 
 class TestSuite(_TestSuite):
     def _handleClassSetUp(self, test, result):
-        previousClass = getattr(result, "_previousTestClass", None)
-        currentClass = test.__class__
-        if (
-            currentClass == previousClass
-            or getattr(currentClass, "setUpClass", None) is None
-        ):
+        previous_class = getattr(result, "_previousTestClass", None)
+        current_class = test.__class__
+        if current_class == previous_class or getattr(current_class, "setUpClass", None) is None:
             return super()._handleClassSetUp(test, result)
 
         # Store a reference to all class attributes before running the setUpClass method
@@ -83,44 +77,42 @@ class TestSuite(_TestSuite):
     def _tearDownPreviousClass(self, test, result):
         # Run any tearDownClass code defined
         super()._tearDownPreviousClass(test, result)
-        previousClass = getattr(result, "_previousTestClass", None)
-        currentClass = test.__class__
-        if currentClass == previousClass:
+        previous_class = getattr(result, "_previousTestClass", None)
+        current_class = test.__class__
+        if current_class == previous_class:
             return
         # See if the previous class attributes have been cleaned
-        if previousClass and getattr(previousClass, "tearDownClass", None):
-            prerun_class_attributes = getattr(
-                previousClass, "_prerun_class_attributes", None
-            )
+        if previous_class and getattr(previous_class, "tearDownClass", None):
+            prerun_class_attributes = getattr(previous_class, "_prerun_class_attributes", None)
             if prerun_class_attributes is not None:
-                previousClass._prerun_class_attributes = None
-                del previousClass._prerun_class_attributes
+                previous_class._prerun_class_attributes = None
+                del previous_class._prerun_class_attributes
                 for attr in prerun_class_attributes:
-                    if hasattr(previousClass, attr):
-                        attr_value = getattr(previousClass, attr, None)
+                    if hasattr(previous_class, attr):
+                        attr_value = getattr(previous_class, attr, None)
                         if attr_value is None:
                             continue
                         if isinstance(attr_value, (bool, str, int)):
-                            setattr(previousClass, attr, None)
+                            setattr(previous_class, attr, None)
                             continue
                         log.warning(
                             "Deleting extra class attribute after test run: %s.%s(%s). "
                             "Please consider using 'del self.%s' on the test class "
                             "'tearDownClass()' method",
-                            previousClass.__name__,
+                            previous_class.__name__,
                             attr,
-                            str(getattr(previousClass, attr))[:100],
+                            str(getattr(previous_class, attr))[:100],
                             attr,
                         )
-                        delattr(previousClass, attr)
+                        delattr(previous_class, attr)
 
     def _handleModuleFixture(self, test, result):
         # We override _handleModuleFixture so that we can inspect all test classes in the module.
         # If all tests in a test class are going to be skipped, mark the class to skip.
         # This avoids running setUpClass and tearDownClass unnecessarily
-        currentModule = test.__class__.__module__
+        current_module = test.__class__.__module__
         try:
-            module = sys.modules[currentModule]
+            module = sys.modules[current_module]
         except KeyError:
             return
         for attr in dir(module):
@@ -128,7 +120,7 @@ class TestSuite(_TestSuite):
             if not inspect.isclass(klass):
                 # Not even a class? Carry on...
                 continue
-            if klass.__module__ != currentModule:
+            if klass.__module__ != current_module:
                 # This class is not defined in the module being tested? Carry on...
                 continue
             if not issubclass(klass, TestCase):
@@ -181,7 +173,7 @@ class TestCase(_TestCase):
 
     def run(self, result=None):
         self._prerun_instance_attributes = dir(self)
-        self.maxDiff = None
+        self.max_diff = None
         outcome = super().run(result=result)
         for attr in dir(self):
             if attr == "_prerun_instance_attributes":

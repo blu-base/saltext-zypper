@@ -4,13 +4,14 @@
 
 import os
 import textwrap
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
-
-import salt.modules.pkg_resource as pkg_resource
-import salt.modules.zypperpkg as zypper
 from salt.exceptions import CommandExecutionError
-from tests.support.mock import MagicMock, patch
+from salt.modules import pkg_resource
+
+import saltext.zypper.modules.zypperpkg as zypper
 
 
 @pytest.fixture
@@ -49,22 +50,25 @@ def test_list_pkgs_no_context():
         "kernel-default_|-(none)_|-4.4.73_|-5.1_|-x86_64_|-(none)_|-1503572639",
         "perseus-dummy_|-(none)_|-1.1_|-1.1_|-i586_|-(none)_|-1529936062",
     ]
-    with patch.dict(zypper.__grains__, {"osarch": "x86_64"}), patch.dict(
-        zypper.__salt__,
-        {"cmd.run": MagicMock(return_value=os.linesep.join(rpm_out))},
-    ), patch.dict(zypper.__salt__, {"pkg_resource.add_pkg": _add_data}), patch.dict(
-        zypper.__salt__,
-        {"pkg_resource.format_pkg_list": pkg_resource.format_pkg_list},
-    ), patch.dict(
-        zypper.__salt__, {"pkg_resource.stringify": MagicMock()}
-    ), patch.object(
-        zypper, "_list_pkgs_from_context"
-    ) as list_pkgs_context_mock:
-        pkgs = zypper.list_pkgs(versions_as_list=True, use_context=False)
+    with (
+        patch.dict(zypper.__grains__, {"osarch": "x86_64"}),
+        patch.dict(
+            zypper.__salt__,
+            {"cmd.run": MagicMock(return_value=os.linesep.join(rpm_out))},
+        ),
+        patch.dict(zypper.__salt__, {"pkg_resource.add_pkg": _add_data}),
+        patch.dict(
+            zypper.__salt__,
+            {"pkg_resource.format_pkg_list": pkg_resource.format_pkg_list},
+        ),
+        patch.dict(zypper.__salt__, {"pkg_resource.stringify": MagicMock()}),
+        patch.object(zypper, "_list_pkgs_from_context") as list_pkgs_context_mock,
+    ):
+        _ = zypper.list_pkgs(versions_as_list=True, use_context=False)
         list_pkgs_context_mock.assert_not_called()
         list_pkgs_context_mock.reset_mock()
 
-        pkgs = zypper.list_pkgs(versions_as_list=True, use_context=False)
+        _ = zypper.list_pkgs(versions_as_list=True, use_context=False)
         list_pkgs_context_mock.assert_not_called()
         list_pkgs_context_mock.reset_mock()
 
@@ -114,9 +118,10 @@ def test_pkg_hold():
             "stderr": "",
         }
     )
-    with patch.object(
-        zypper, "list_locks", MagicMock(return_value=list_locks_mock)
-    ), patch.dict(zypper.__salt__, {"cmd.run_all": cmd}):
+    with (
+        patch.object(zypper, "list_locks", MagicMock(return_value=list_locks_mock)),
+        patch.dict(zypper.__salt__, {"cmd.run_all": cmd}),
+    ):
         ret = zypper.hold("foo")
         assert ret["foo"]["changes"]["old"] == ""
         assert ret["foo"]["changes"]["new"] == "hold"
@@ -166,9 +171,10 @@ def test_pkg_unhold():
             "stderr": "",
         }
     )
-    with patch.object(
-        zypper, "list_locks", MagicMock(return_value=list_locks_mock)
-    ), patch.dict(zypper.__salt__, {"cmd.run_all": cmd}):
+    with (
+        patch.object(zypper, "list_locks", MagicMock(return_value=list_locks_mock)),
+        patch.dict(zypper.__salt__, {"cmd.run_all": cmd}),
+    ):
         ret = zypper.unhold("foo")
         assert ret["foo"]["comment"] == "Package foo was already unheld."
         cmd.assert_not_called()
@@ -211,12 +217,10 @@ def test_pkg_list_holds():
         if name in installed_pkgs:
             return {name: installed_pkgs.get(name)}
 
-    with patch.object(
-        zypper, "list_locks", MagicMock(return_value=list_locks_mock)
-    ), patch.object(
-        zypper, "search", MagicMock(side_effect=zypper_search_mock)
-    ), patch.object(
-        zypper, "info_installed", MagicMock(side_effect=zypper_search_mock)
+    with (
+        patch.object(zypper, "list_locks", MagicMock(return_value=list_locks_mock)),
+        patch.object(zypper, "search", MagicMock(side_effect=zypper_search_mock)),
+        patch.object(zypper, "info_installed", MagicMock(side_effect=zypper_search_mock)),
     ):
         ret = zypper.list_holds()
         assert len(ret) == 1
@@ -240,13 +244,15 @@ def test_upgrade(
     pkgs_param,
     diff_attr_param,
 ):
-    with patch.object(zypper, "refresh_db", MagicMock(return_value=True)), patch(
-        "salt.modules.zypperpkg.__zypper__.noraise.call"
-    ) as zypper_mock, patch.object(
-        zypper,
-        "list_pkgs",
-        MagicMock(side_effect=[{package: pre_version}, {package: post_version}]),
-    ) as list_pkgs_mock:
+    with (
+        patch.object(zypper, "refresh_db", MagicMock(return_value=True)),
+        patch("saltext.zypper.modules.zypperpkg.__zypper__.noraise.call") as zypper_mock,
+        patch.object(
+            zypper,
+            "list_pkgs",
+            MagicMock(side_effect=[{package: pre_version}, {package: post_version}]),
+        ) as list_pkgs_mock,
+    ):
         expected_call = ["update", "--auto-agree-with-licenses"]
         for repo in fromrepo_param:
             expected_call.extend(["--repo", repo])
@@ -275,12 +281,14 @@ def test_upgrade(
     ],
 )
 def test_dist_upgrade(package, pre_version, post_version, fromrepo_param):
-    with patch.object(zypper, "refresh_db", MagicMock(return_value=True)), patch(
-        "salt.modules.zypperpkg.__zypper__.noraise.call"
-    ) as zypper_mock, patch.object(
-        zypper,
-        "list_pkgs",
-        MagicMock(side_effect=[{package: pre_version}, {package: post_version}]),
+    with (
+        patch.object(zypper, "refresh_db", MagicMock(return_value=True)),
+        patch("saltext.zypper.modules.zypperpkg.__zypper__.noraise.call") as zypper_mock,
+        patch.object(
+            zypper,
+            "list_pkgs",
+            MagicMock(side_effect=[{package: pre_version}, {package: post_version}]),
+        ),
     ):
         expected_call = ["dist-upgrade", "--auto-agree-with-licenses"]
 
@@ -300,12 +308,14 @@ def test_dist_upgrade(package, pre_version, post_version, fromrepo_param):
     ],
 )
 def test_dist_upgrade_dry_run(package, pre_version, post_version, fromrepo_param):
-    with patch.object(zypper, "refresh_db", MagicMock(return_value=True)), patch(
-        "salt.modules.zypperpkg.__zypper__.noraise.call"
-    ) as zypper_mock, patch.object(
-        zypper,
-        "list_pkgs",
-        MagicMock(side_effect=[{package: pre_version}, {package: post_version}]),
+    with (
+        patch.object(zypper, "refresh_db", MagicMock(return_value=True)),
+        patch("saltext.zypper.modules.zypperpkg.__zypper__.noraise.call") as zypper_mock,
+        patch.object(
+            zypper,
+            "list_pkgs",
+            MagicMock(side_effect=[{package: pre_version}, {package: post_version}]),
+        ),
     ):
         expected_call = ["dist-upgrade", "--auto-agree-with-licenses", "--dry-run"]
 
@@ -335,10 +345,10 @@ def test_dist_upgrade_failure():
     zypper_mock.stderr = ""
     zypper_mock.exit_code = 3
     zypper_mock.noraise.call = call_spy
-    with patch.object(zypper, "refresh_db", MagicMock(return_value=True)), patch(
-        "salt.modules.zypperpkg.__zypper__", zypper_mock
-    ), patch.object(
-        zypper, "list_pkgs", MagicMock(side_effect=[{"vim": 1.1}, {"vim": 1.1}])
+    with (
+        patch.object(zypper, "refresh_db", MagicMock(return_value=True)),
+        patch("saltext.zypper.modules.zypperpkg.__zypper__", zypper_mock),
+        patch.object(zypper, "list_pkgs", MagicMock(side_effect=[{"vim": 1.1}, {"vim": 1.1}])),
     ):
         expected_call = [
             "dist-upgrade",

@@ -9,10 +9,9 @@ import logging
 import sys
 import types
 from collections import deque
+from unittest.mock import patch
 
 import attr
-
-from tests.support.mock import patch
 
 log = logging.getLogger(__name__)
 
@@ -68,16 +67,12 @@ class LoaderModuleMock:
             "__proxyenabled__",
         ),
     )
-    _finalizers = attr.ib(
-        init=False, repr=False, hash=False, default=attr.Factory(deque)
-    )
+    _finalizers = attr.ib(init=False, repr=False, hash=False, default=attr.Factory(deque))
 
     def start(self):
         module_globals = {dunder: {} for dunder in self.salt_module_dunders}
         for module, globals_to_mock in self.setup_loader_modules.items():
-            log.trace(
-                "Setting up loader globals for %s; globals: %s", module, globals_to_mock
-            )
+            log.trace("Setting up loader globals for %s; globals: %s", module, globals_to_mock)
             if not isinstance(module, types.ModuleType):
                 raise RuntimeError(
                     "The dictionary keys returned by setup_loader_modules() "
@@ -141,9 +136,7 @@ class LoaderModuleMock:
             return
         sys_modules = mocks["sys.modules"]
         if not isinstance(sys_modules, dict):
-            raise RuntimeError(
-                f"'sys.modules' must be a dictionary not: {type(sys_modules)}"
-            )
+            raise RuntimeError(f"'sys.modules' must be a dictionary not: {type(sys_modules)}")
         patcher = patch.dict(sys.modules, values=sys_modules)
         patcher.start()
         self.addfinalizer(patcher.stop)
@@ -164,14 +157,14 @@ class LoaderModuleMock:
                             self.setup_loader_modules,
                         )
                     )
-                elif key not in allowed_salt_dunders:
+                if key not in allowed_salt_dunders:
                     raise RuntimeError(
                         "Don't know how to handle {!r}. Passed loader module dict: {}".format(
                             key,
                             self.setup_loader_modules,
                         )
                     )
-                elif key in salt_dunder_dicts and not hasattr(module, key):
+                if key in salt_dunder_dicts and not hasattr(module, key):
                     # Add the key as a dictionary attribute to the module so it can be patched by `patch.dict`'
                     setattr(module, key, {})
                     # Remove the added attribute after the test finishes

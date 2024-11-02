@@ -50,7 +50,8 @@ import shutil
 
 import salt.utils.path
 import salt.utils.platform
-import tests.support.paths as paths
+
+from tests.support import paths
 
 try:
     import pwd
@@ -88,17 +89,13 @@ def recursive_copytree(source, destination, overwrite=False):
     for root, dirs, files in os.walk(source):
         for item in dirs:
             src_path = os.path.join(root, item)
-            dst_path = os.path.join(
-                destination, src_path.replace(source, "").lstrip(os.sep)
-            )
+            dst_path = os.path.join(destination, src_path.replace(source, "").lstrip(os.sep))
             if not os.path.exists(dst_path):
                 log.debug("Creating directory: %s", dst_path)
                 os.makedirs(dst_path)
         for item in files:
             src_path = os.path.join(root, item)
-            dst_path = os.path.join(
-                destination, src_path.replace(source, "").lstrip(os.sep)
-            )
+            dst_path = os.path.join(destination, src_path.replace(source, "").lstrip(os.sep))
             if os.path.exists(dst_path) and not overwrite:
                 if os.stat(src_path).st_mtime > os.stat(dst_path).st_mtime:
                     log.debug("Copying %s to %s", src_path, dst_path)
@@ -121,7 +118,7 @@ class RuntimeVars:
 
     def lock(self):
         # Late import
-        from salt.utils.immutabletypes import freeze
+        from salt.utils.immutabletypes import freeze  # pylint: disable=C0415
 
         frozen_vars = freeze(self._vars.copy())
         self._vars = frozen_vars
@@ -175,12 +172,8 @@ RUNTIME_VARS = RuntimeVars(
     TMP_CONF_MINION_INCLUDES=os.path.join(paths.TMP_CONF_DIR, "minion.d"),
     TMP_CONF_PROXY_INCLUDES=os.path.join(paths.TMP_CONF_DIR, "proxy.d"),
     TMP_CONF_CLOUD_INCLUDES=os.path.join(paths.TMP_CONF_DIR, "cloud.conf.d"),
-    TMP_CONF_CLOUD_PROFILE_INCLUDES=os.path.join(
-        paths.TMP_CONF_DIR, "cloud.profiles.d"
-    ),
-    TMP_CONF_CLOUD_PROVIDER_INCLUDES=os.path.join(
-        paths.TMP_CONF_DIR, "cloud.providers.d"
-    ),
+    TMP_CONF_CLOUD_PROFILE_INCLUDES=os.path.join(paths.TMP_CONF_DIR, "cloud.profiles.d"),
+    TMP_CONF_CLOUD_PROVIDER_INCLUDES=os.path.join(paths.TMP_CONF_DIR, "cloud.providers.d"),
     TMP_SUB_MINION_CONF_DIR=paths.TMP_SUB_MINION_CONF_DIR,
     TMP_SYNDIC_MASTER_CONF_DIR=paths.TMP_SYNDIC_MASTER_CONF_DIR,
     TMP_SYNDIC_MINION_CONF_DIR=paths.TMP_SYNDIC_MINION_CONF_DIR,

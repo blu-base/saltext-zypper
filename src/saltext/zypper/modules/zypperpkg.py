@@ -6,8 +6,8 @@ Package support for openSUSE via the zypper package manager
 .. important::
     If you feel that Salt should be using this module to manage packages on a
     minion, and it is using a different module (or gives an error similar to
-    *'pkg.install' is not available*), see :ref:`here
-    <module-provider-override>`.
+    *'pkg.install' is not available*), see `here
+    <https://docs.saltproject.io/en/latest/ref/modules/index.html#overriding-virtual-module-providers>`_.
 
 """
 
@@ -34,7 +34,9 @@ import salt.utils.pkg.rpm
 import salt.utils.stringutils
 import salt.utils.systemd
 import salt.utils.versions
-from salt.exceptions import CommandExecutionError, MinionError, SaltInvocationError
+from salt.exceptions import CommandExecutionError
+from salt.exceptions import MinionError
+from salt.exceptions import SaltInvocationError
 from salt.utils.versions import LooseVersion
 
 if salt.utils.files.is_fcntl_available():
@@ -123,7 +125,7 @@ class _Zypper:
         """
         self.__cmd = ["zypper", "--non-interactive"]
         self.__exit_code = 0
-        self.__call_result = dict()
+        self.__call_result = {}
         self.__error_msg = ""
         self.__env = salt.utils.environment.get_module_environment(globals())
 
@@ -151,11 +153,15 @@ class _Zypper:
 
         # Ignore exit code for 106 (repo is not available)
         if "no_repo_failure" in kwargs:
-            self.__ignore_repo_failure = kwargs["no_repo_failure"]
+            self.__ignore_repo_failure = kwargs[  # pylint: disable=attribute-defined-outside-init
+                "no_repo_failure"
+            ]
         if "systemd_scope" in kwargs:
-            self.__systemd_scope = kwargs["systemd_scope"]
+            self.__systemd_scope = kwargs[  # pylint: disable=attribute-defined-outside-init
+                "systemd_scope"
+            ]
         if "root" in kwargs:
-            self.__root = kwargs["root"]
+            self.__root = kwargs["root"]  # pylint: disable=attribute-defined-outside-init
         return self
 
     def __getattr__(self, item):
@@ -170,13 +176,13 @@ class _Zypper:
             self._reset()
 
         if item == "xml":
-            self.__xml = True
+            self.__xml = True  # pylint: disable=attribute-defined-outside-init
         elif item == "nolock":
-            self.__no_lock = True
+            self.__no_lock = True  # pylint: disable=attribute-defined-outside-init
         elif item == "noraise":
-            self.__no_raise = True
+            self.__no_raise = True  # pylint: disable=attribute-defined-outside-init
         elif item == "refreshable":
-            self.__refresh = True
+            self.__refresh = True  # pylint: disable=attribute-defined-outside-init
         elif item == "call":
             return self.__call
         else:
@@ -184,7 +190,7 @@ class _Zypper:
 
         # Prevent the use of "refreshable" together with "nolock".
         if self.__no_lock:
-            self.__no_lock = not self.__refresh
+            self.__no_lock = not self.__refresh  # pylint: disable=attribute-defined-outside-init
 
         return self
 
@@ -202,8 +208,7 @@ class _Zypper:
 
     @error_msg.setter
     def error_msg(self, msg):
-        if self._is_error():
-            self.__error_msg = msg and os.linesep.join(msg) or "Check Zypper's logs."
+        self.__error_msg = os.linesep.join(msg) if msg else "Check Zypper's logs."
 
     @property
     def stdout(self):
@@ -267,9 +272,7 @@ class _Zypper:
 
         :return:
         """
-        return (
-            [itm for itm in self.XML_DIRECTIVES if itm in self.__cmd] and True or False
-        )
+        return bool([itm for itm in self.XML_DIRECTIVES if itm in self.__cmd])
 
     def _check_result(self):
         """
@@ -287,18 +290,10 @@ class _Zypper:
             return False
 
         if self._is_error():
-            _error_msg = list()
+            _error_msg = []
             if not self._is_xml_mode():
-                msg = (
-                    self.__call_result["stderr"]
-                    and self.__call_result["stderr"].strip()
-                    or ""
-                )
-                msg += (
-                    self.__call_result["stdout"]
-                    and self.__call_result["stdout"].strip()
-                    or ""
-                )
+                msg = self.__call_result["stderr"] and self.__call_result["stderr"].strip() or ""
+                msg += self.__call_result["stdout"] and self.__call_result["stdout"].strip() or ""
                 if msg:
                     _error_msg.append(msg)
             else:
@@ -324,7 +319,7 @@ class _Zypper:
         :param state:
         :return:
         """
-        self.__called = True
+        self.__called = True  # pylint: disable=attribute-defined-outside-init
         if self.__xml:
             self.__cmd.append("--xmlout")
         if not self.__refresh and "--no-refresh" not in args:
@@ -339,9 +334,7 @@ class _Zypper:
         if self.__no_lock:
             kwargs["env"][
                 "ZYPP_READONLY_HACK"
-            ] = (  # Disables locking for read-only operations. Do not try that at home!
-                "1"
-            )
+            ] = "1"  # Disables locking for read-only operations. Do not try that at home!
 
         # Zypper call will stuck here waiting, if another zypper hangs until forever.
         # However, Zypper lock needs to be always respected.
@@ -352,7 +345,7 @@ class _Zypper:
                 cmd.extend(["systemd-run", "--scope"])
             cmd.extend(self.__cmd)
             log.debug("Calling Zypper: %s", " ".join(cmd))
-            self.__call_result = __salt__["cmd.run_all"](cmd, **kwargs)
+            self.__call_result = __salt__["cmd.run_all"](cmd, **kwargs)  # pylint: disable=W0201
             if self._check_result():
                 break
 
@@ -375,9 +368,7 @@ class _Zypper:
 
         return (
             self._is_xml_mode()
-            and dom.parseString(
-                salt.utils.stringutils.to_str(self.__call_result["stdout"])
-            )
+            and dom.parseString(salt.utils.stringutils.to_str(self.__call_result["stdout"]))
             or self.__call_result["stdout"]
         )
 
@@ -391,16 +382,13 @@ class _Zypper:
                     )
                     data["cmdline"] = " ".join(data["cmdline"])
                     data["info"] = "Blocking process created at {}.".format(
-                        datetime.datetime.utcfromtimestamp(
-                            data["create_time"]
-                        ).isoformat()
+                        datetime.datetime.utcfromtimestamp(data["create_time"]).isoformat()
                     )
                     data["success"] = True
             except Exception as err:  # pylint: disable=broad-except
                 data = {
                     "info": (
-                        "Unable to retrieve information about "
-                        "blocking process: {}".format(err)
+                        "Unable to retrieve information about " "blocking process: {}".format(err)
                     ),
                     "success": False,
                 }
@@ -476,9 +464,9 @@ class Wildcard:
         Get available versions of the package.
         :return:
         """
-        solvables = self.zypper.nolock.xml.call(
-            "se", "-xv", self.name
-        ).getElementsByTagName("solvable")
+        solvables = self.zypper.nolock.xml.call("se", "-xv", self.name).getElementsByTagName(
+            "solvable"
+        )
         if not solvables:
             raise CommandExecutionError(f"No packages found matching '{self.name}'")
 
@@ -514,9 +502,7 @@ class Wildcard:
         exact_version = re.sub(r"[<>=+]*", "", version)
         self._op = version.replace(exact_version, "") or None
         if self._op and self._op not in self.Z_OP:
-            raise CommandExecutionError(
-                f'Zypper do not supports operator "{self._op}".'
-            )
+            raise CommandExecutionError(f'Zypper do not supports operator "{self._op}".')
         self.version = exact_version
 
 
@@ -561,7 +547,7 @@ def list_upgrades(refresh=True, root=None, **kwargs):
     if refresh:
         refresh_db(root)
 
-    ret = dict()
+    ret = {}
     cmd = ["list-updates"]
     if "fromrepo" in kwargs:
         repos = kwargs["fromrepo"]
@@ -570,9 +556,7 @@ def list_upgrades(refresh=True, root=None, **kwargs):
         for repo in repos:
             cmd.extend(["--repo", repo if isinstance(repo, str) else str(repo)])
         log.debug("Targeting repos: %s", repos)
-    for update_node in (
-        __zypper__(root=root).nolock.xml.call(*cmd).getElementsByTagName("update")
-    ):
+    for update_node in __zypper__(root=root).nolock.xml.call(*cmd).getElementsByTagName("update"):
         if update_node.getAttribute("kind") == "package":
             ret[update_node.getAttribute("name")] = update_node.getAttribute("edition")
 
@@ -625,11 +609,11 @@ def info_installed(*names, **kwargs):
         salt '*' pkg.info_installed <package1> <package2> <package3> ... attr=version,vendor errors=report
     """
     all_versions = kwargs.get("all_versions", False)
-    ret = dict()
+    ret = {}
     for pkg_name, pkgs_nfo in __salt__["lowpkg.info"](*names, **kwargs).items():
         pkg_nfo = pkgs_nfo if all_versions else [pkgs_nfo]
         for _nfo in pkg_nfo:
-            t_nfo = dict()
+            t_nfo = {}
             # Translate dpkg-specific keys to a common structure
             for key, value in _nfo.items():
                 if key == "source_rpm":
@@ -684,9 +668,7 @@ def info_available(*names, **kwargs):
         pkg_info.extend(
             re.split(
                 r"Information for package*",
-                __zypper__(root=root).nolock.call(
-                    "info", "-t", "package", *batch[:batch_size]
-                ),
+                __zypper__(root=root).nolock.call("info", "-t", "package", *batch[:batch_size]),
             )
         )
         batch = batch[batch_size:]
@@ -755,7 +737,7 @@ def latest_version(*names, **kwargs):
         salt '*' pkg.latest_version <package name>
         salt '*' pkg.latest_version <package1> <package2> <package3> ...
     """
-    ret = dict()
+    ret = {}
 
     if not names:
         return ret
@@ -778,9 +760,7 @@ def latest_version(*names, **kwargs):
 
 
 # available_version is being deprecated
-available_version = salt.utils.functools.alias_function(
-    latest_version, "available_version"
-)
+available_version = salt.utils.functools.alias_function(latest_version, "available_version")
 
 
 def upgrade_available(name, **kwargs):
@@ -824,7 +804,7 @@ def version(*names, **kwargs):
     return __salt__["pkg_resource.version"](*names, **kwargs) or {}
 
 
-def version_cmp(ver1, ver2, ignore_epoch=False, **kwargs):
+def version_cmp(ver1, ver2, ignore_epoch=False, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 2015.5.4
 
@@ -850,9 +830,7 @@ def _list_pkgs_from_context(versions_as_list, contextkey, attr):
     """
     Use pkg list from __context__
     """
-    return __salt__["pkg_resource.format_pkg_list"](
-        __context__[contextkey], versions_as_list, attr
-    )
+    return __salt__["pkg_resource.format_pkg_list"](__context__[contextkey], versions_as_list, attr)
 
 
 def list_pkgs(versions_as_list=False, root=None, includes=None, **kwargs):
@@ -862,19 +840,19 @@ def list_pkgs(versions_as_list=False, root=None, includes=None, **kwargs):
 
         {'<package_name>': '<version>[,<version>...]'}
 
-    versions_as_list:
+    :param versions_as_list:
         If set to true, the versions are provided as a list
 
         {'<package_name>': ['<version>', '<version>']}
 
-    root:
+    :param root:
         operate on a different root directory.
 
-    includes:
+    :param includes:
         List of types of packages to include (package, patch, pattern, product)
         By default packages are always included
 
-    attr:
+    :param attr:
         If a list of package attributes is specified, returned value will
         contain them in addition to version, eg.::
 
@@ -887,10 +865,10 @@ def list_pkgs(versions_as_list=False, root=None, includes=None, **kwargs):
 
             .. versionadded:: 2018.3.0
 
-    removed:
+    :param removed:
         not supported
 
-    purge_desired:
+    :param purge_desired:
         not supported
 
     CLI Example:
@@ -903,9 +881,7 @@ def list_pkgs(versions_as_list=False, root=None, includes=None, **kwargs):
     """
     versions_as_list = salt.utils.data.is_true(versions_as_list)
     # not yet implemented or not applicable
-    if any(
-        [salt.utils.data.is_true(kwargs.get(x)) for x in ("removed", "purge_desired")]
-    ):
+    if any(salt.utils.data.is_true(kwargs.get(x)) for x in ("removed", "purge_desired")):
         return {}
 
     attr = kwargs.get("attr")
@@ -954,12 +930,12 @@ def list_pkgs(versions_as_list=False, root=None, includes=None, **kwargs):
             }
             __salt__["pkg_resource.add_pkg"](ret, pkginfo.name, all_attr)
 
-    _ret = {}
-    for pkgname in ret:
+    _ret = {
+        pkgname: sorted(packages, key=lambda d: d["version"])
+        for pkgname, packages in ret.items()
         # Filter out GPG public keys packages
-        if pkgname.startswith("gpg-pubkey"):
-            continue
-        _ret[pkgname] = sorted(ret[pkgname], key=lambda d: d["version"])
+        if not pkgname.startswith("gpg-pubkey")
+    }
 
     for include in includes:
         if include == "product":
@@ -999,9 +975,7 @@ def list_pkgs(versions_as_list=False, root=None, includes=None, **kwargs):
 
     __context__[contextkey] = _ret
 
-    return __salt__["pkg_resource.format_pkg_list"](
-        __context__[contextkey], versions_as_list, attr
-    )
+    return __salt__["pkg_resource.format_pkg_list"](__context__[contextkey], versions_as_list, attr)
 
 
 def list_repo_pkgs(*args, **kwargs):
@@ -1024,19 +998,10 @@ def list_repo_pkgs(*args, **kwargs):
     .. code-block:: python
 
         # With byrepo=False (default)
+        {"bash": ["4.3-83.3.1", "4.3-82.6"], "vim": ["7.4.326-12.1"]}
         {
-            'bash': ['4.3-83.3.1',
-                     '4.3-82.6'],
-            'vim': ['7.4.326-12.1']
-        }
-        {
-            'OSS': {
-                'bash': ['4.3-82.6'],
-                'vim': ['7.4.326-12.1']
-            },
-            'OSS Update': {
-                'bash': ['4.3-83.3.1']
-            }
+            "OSS": {"bash": ["4.3-82.6"], "vim": ["7.4.326-12.1"]},
+            "OSS Update": {"bash": ["4.3-83.3.1"]},
         }
 
     fromrepo : None
@@ -1081,9 +1046,7 @@ def list_repo_pkgs(*args, **kwargs):
 
     root = kwargs.get("root") or None
     for node in (
-        __zypper__(root=root)
-        .xml.call("se", "-s", *targets)
-        .getElementsByTagName("solvable")
+        __zypper__(root=root).xml.call("se", "-s", *targets).getElementsByTagName("solvable")
     ):
         pkginfo = dict(node.attributes.items())
         try:
@@ -1103,7 +1066,7 @@ def list_repo_pkgs(*args, **kwargs):
                 version_list.add(pkgversion)
 
     if byrepo:
-        for reponame in ret:
+        for reponame in ret:  # pylint: disable=consider-using-dict-items
             # Sort versions newest to oldest
             for pkgname in ret[reponame]:
                 sorted_versions = sorted(
@@ -1113,13 +1076,11 @@ def list_repo_pkgs(*args, **kwargs):
         return ret
     else:
         byrepo_ret = {}
-        for reponame in ret:
+        for reponame in ret:  # pylint: disable=consider-using-dict-items
             for pkgname in ret[reponame]:
                 byrepo_ret.setdefault(pkgname, []).extend(ret[reponame][pkgname])
-        for pkgname in byrepo_ret:
-            sorted_versions = sorted(
-                (LooseVersion(x) for x in byrepo_ret[pkgname]), reverse=True
-            )
+        for pkgname in byrepo_ret:  # pylint: disable=consider-using-dict-items
+            sorted_versions = sorted((LooseVersion(x) for x in byrepo_ret[pkgname]), reverse=True)
             byrepo_ret[pkgname] = [x.vstring for x in sorted_versions]
         return byrepo_ret
 
@@ -1133,11 +1094,7 @@ def _get_configured_repos(root=None):
     repos_cfg = configparser.ConfigParser()
     if os.path.exists(repos):
         repos_cfg.read(
-            [
-                repos + "/" + fname
-                for fname in os.listdir(repos)
-                if fname.endswith(".repo")
-            ]
+            [repos + "/" + fname for fname in os.listdir(repos) if fname.endswith(".repo")]
         )
     else:
         log.warning("Repositories not found in %s", repos)
@@ -1178,7 +1135,7 @@ def get_repo(repo, root=None, **kwargs):  # pylint: disable=unused-argument
     return _get_repo_info(repo, root=root)
 
 
-def list_repos(root=None, **kwargs):
+def list_repos(root=None, **kwargs):  # pylint: disable=unused-argument
     """
     Lists all repos.
 
@@ -1215,9 +1172,7 @@ def del_repo(repo, root=None):
     repos_cfg = _get_configured_repos(root=root)
     for alias in repos_cfg.sections():
         if alias == repo:
-            doc = __zypper__(root=root).xml.call(
-                "rr", "--loose-auth", "--loose-query", alias
-            )
+            doc = __zypper__(root=root).xml.call("rr", "--loose-auth", "--loose-query", alias)
             msg = doc.getElementsByTagName("message")
             if doc.getElementsByTagName("progress") and msg:
                 return {
@@ -1311,9 +1266,7 @@ def mod_repo(repo, **kwargs):
             base_url = urllib.parse.urlparse(repo_meta["baseurl"])
 
             if new_url == base_url:
-                raise CommandExecutionError(
-                    f"Repository '{repo}' already exists as '{alias}'."
-                )
+                raise CommandExecutionError(f"Repository '{repo}' already exists as '{alias}'.")
 
         # Add new repo
         __zypper__(root=root).xml.call("ar", url, repo)
@@ -1328,11 +1281,7 @@ def mod_repo(repo, **kwargs):
         added = True
 
     repo_info = _get_repo_info(repo, root=root)
-    if (
-        not added
-        and "baseurl" in kwargs
-        and not (kwargs["baseurl"] == repo_info["baseurl"])
-    ):
+    if not added and "baseurl" in kwargs and not kwargs["baseurl"] == repo_info["baseurl"]:
         # Note: zypper does not support changing the baseurl
         # we need to remove the repository and add it again with the new baseurl
         repo_info.update(kwargs)
@@ -1404,12 +1353,15 @@ def refresh_db(force=None, root=None):
     ``refreshdb_force`` is set to ``true`` in the pillar. The CLI option
     overrides the pillar setting.
 
-    It will return a dict::
+    :param force:
+        run ``zypper refresh`` with ``--force`` if set ``True``
+
+    :param root:
+        operate on a different root directory.
+
+    :return: It will return a dict::
 
         {'<database name>': Bool}
-
-    root
-        operate on a different root directory.
 
     CLI Example:
 
@@ -1605,11 +1557,9 @@ def install(
         refresh_db(root)
 
     try:
-        pkg_params, pkg_type = __salt__["pkg_resource.parse_targets"](
-            name, pkgs, sources, **kwargs
-        )
+        pkg_params, pkg_type = __salt__["pkg_resource.parse_targets"](name, pkgs, sources, **kwargs)
     except MinionError as exc:
-        raise CommandExecutionError(exc)
+        raise CommandExecutionError(exc) from exc
 
     if not pkg_params:
         return {}
@@ -1621,9 +1571,7 @@ def install(
             # Allow "version" to work for single package target
             pkg_params = {name: version_num}
         else:
-            log.warning(
-                '"version" parameter will be ignored for multiple package targets'
-            )
+            log.warning('"version" parameter will be ignored for multiple package targets')
 
     if pkg_type == "repository":
         targets = []
@@ -1644,13 +1592,12 @@ def install(
         for advisory_id in pkg_params:
             if advisory_id not in cur_patches:
                 raise CommandExecutionError(f'Advisory id "{advisory_id}" not found')
-            else:
-                # If we add here the `patch:` prefix, the
-                # `_find_types` helper will take the patches into the
-                # list of packages. Usually this is the correct thing
-                # to do, but we can break software the depends on the
-                # old behaviour.
-                targets.append(advisory_id)
+            # If we add here the `patch:` prefix, the
+            # `_find_types` helper will take the patches into the
+            # list of packages. Usually this is the correct thing
+            # to do, but we can break software the depends on the
+            # old behaviour.
+            targets.append(advisory_id)
     else:
         targets = pkg_params
 
@@ -1671,9 +1618,7 @@ def install(
         fromrepoopt = ""
     cmd_install = ["install", "--auto-agree-with-licenses"]
 
-    cmd_install.append(
-        kwargs.get("resolve_capabilities") and "--capability" or "--name"
-    )
+    cmd_install.append(kwargs.get("resolve_capabilities") and "--capability" or "--name")
 
     if not refresh:
         cmd_install.insert(0, "--no-refresh")
@@ -1713,9 +1658,7 @@ def install(
             .call(*cmd)
             .splitlines()
         ):
-            match = re.match(
-                r"^The selected package '([^']+)'.+has lower version", line
-            )
+            match = re.match(r"^The selected package '([^']+)'.+has lower version", line)
             if match:
                 downgrades.append(match.group(1))
 
@@ -1827,18 +1770,18 @@ def upgrade(
     root
         Operate on a different root directory.
 
-    diff_attr:
+    diff_attr
         If a list of package attributes is specified, returned value will
-        contain them, eg.::
+        contain them, eg.:
 
-            {'<package>': {
-                'old': {
-                    'version': '<old-version>',
-                    'arch': '<old-arch>'},
+        .. code-block:: python
 
-                'new': {
-                    'version': '<new-version>',
-                    'arch': '<new-arch>'}}}
+            {
+                "<package>": {
+                    "old": {"version": "<old-version>", "arch": "<old-arch>"},
+                    "new": {"version": "<new-version>", "arch": "<new-arch>"},
+                }
+            }
 
         Valid attributes are: ``epoch``, ``version``, ``release``, ``arch``,
         ``install_date``, ``install_date_time_t``.
@@ -1847,26 +1790,23 @@ def upgrade(
 
         .. versionadded:: 3006.0
 
-    Returns a dictionary containing the changes:
+    :return: Returns a dictionary containing the changes:
 
-    .. code-block:: python
+        .. code-block:: python
 
-        {'<package>':  {'old': '<old-version>',
-                        'new': '<new-version>'}}
+            {"<package>": {"old": "<old-version>", "new": "<new-version>"}}
 
-    If an attribute list is specified in ``diff_attr``, the dict will also contain
-    any specified attribute, eg.::
+        If an attribute list is specified in ``diff_attr``, the dict will also contain
+        any specified attribute, eg.:
 
-    .. code-block:: python
+        .. code-block:: python
 
-        {'<package>': {
-            'old': {
-                'version': '<old-version>',
-                'arch': '<old-arch>'},
-
-            'new': {
-                'version': '<new-version>',
-                'arch': '<new-arch>'}}}
+            {
+                "<package>": {
+                    "old": {"version": "<old-version>", "arch": "<old-arch>"},
+                    "new": {"version": "<new-version>", "arch": "<new-arch>"},
+                }
+            }
 
     CLI Example:
 
@@ -1878,9 +1818,7 @@ def upgrade(
         salt '*' pkg.upgrade dist_upgrade=True fromrepo='["MyRepoName"]' novendorchange=True
         salt '*' pkg.upgrade dist_upgrade=True dryrun=True
     """
-    cmd_update = (["dist-upgrade"] if dist_upgrade else ["update"]) + [
-        "--auto-agree-with-licenses"
-    ]
+    cmd_update = (["dist-upgrade"] if dist_upgrade else ["update"]) + ["--auto-agree-with-licenses"]
 
     if skip_verify:
         # The '--no-gpg-checks' needs to be placed before the Zypper command.
@@ -1906,9 +1844,7 @@ def upgrade(
                 cmd_update.append("--no-allow-vendor-change")
                 log.info("Disabling vendor changes")
             else:
-                log.warning(
-                    "Disabling vendor changes is not supported on this Zypper version"
-                )
+                log.warning("Disabling vendor changes is not supported on this Zypper version")
 
         if no_recommends:
             cmd_update.append("--no-recommends")
@@ -1930,7 +1866,7 @@ def upgrade(
                     cmd_update.extend(pkg_params.keys())
 
             except MinionError as exc:
-                raise CommandExecutionError(exc)
+                raise CommandExecutionError(exc) from exc
 
     old = list_pkgs(root=root, attr=diff_attr)
 
@@ -1965,7 +1901,7 @@ def _uninstall(name=None, pkgs=None, root=None):
     try:
         pkg_params = __salt__["pkg_resource.parse_targets"](name, pkgs)[0]
     except MinionError as exc:
-        raise CommandExecutionError(exc)
+        raise CommandExecutionError(exc) from exc
 
     includes = _find_types(pkg_params.keys())
     old = list_pkgs(root=root, includes=includes)
@@ -1984,9 +1920,7 @@ def _uninstall(name=None, pkgs=None, root=None):
 
     errors = []
     while targets:
-        __zypper__(systemd_scope=systemd_scope, root=root).call(
-            "remove", *targets[:500]
-        )
+        __zypper__(systemd_scope=systemd_scope, root=root).call("remove", *targets[:500])
         targets = targets[500:]
 
     _clean_cache()
@@ -2029,9 +1963,7 @@ def normalize_name(name):
     return name
 
 
-def remove(
-    name=None, pkgs=None, root=None, **kwargs
-):  # pylint: disable=unused-argument
+def remove(name=None, pkgs=None, root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionchanged:: 2015.8.12,2016.3.3,2016.11.0
         On minions running systemd>=205, `systemd-run(1)`_ is now used to
@@ -2126,7 +2058,7 @@ def purge(name=None, pkgs=None, root=None, **kwargs):  # pylint: disable=unused-
     return _uninstall(name=name, pkgs=pkgs, root=root)
 
 
-def list_holds(pattern=None, full=True, root=None, **kwargs):
+def list_holds(pattern=None, full=True, root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 3005
 
@@ -2174,18 +2106,14 @@ def list_holds(pattern=None, full=True, root=None, **kwargs):
             for pkg in found_pkgs:
                 if pkg not in inst_pkgs:
                     inst_pkgs.update(
-                        info_installed(
-                            pkg, root=root, attr="edition,epoch", all_versions=True
-                        )
+                        info_installed(pkg, root=root, attr="edition,epoch", all_versions=True)
                     )
 
     ptrn_re = re.compile(rf"{pattern}-\S+") if pattern else None
     for pkg_name, pkg_editions in inst_pkgs.items():
         for pkg_info in pkg_editions:
             pkg_ret = (
-                "{}-{}:{}.*".format(
-                    pkg_name, pkg_info.get("epoch", 0), pkg_info.get("edition")
-                )
+                "{}-{}:{}.*".format(pkg_name, pkg_info.get("epoch", 0), pkg_info.get("edition"))
                 if full
                 else pkg_name
             )
@@ -2223,9 +2151,7 @@ def list_locks(root=None):
                 lock = {}
                 for element in [el for el in meta if el]:
                     if ":" in element:
-                        lock.update(
-                            dict([tuple(i.strip() for i in element.split(":", 1))])
-                        )
+                        lock.update(dict([tuple(i.strip() for i in element.split(":", 1))]))
                 if lock.get("solvable_name"):
                     locks[lock.pop("solvable_name")] = lock
     except OSError:
@@ -2250,7 +2176,7 @@ def clean_locks(root=None):
 
         salt '*' pkg.clean_locks
     """
-    LCK = "removed"
+    LCK = "removed"  # pylint: disable=invalid-name
     out = {LCK: 0}
     locks = os.path.join(root, os.path.relpath(LOCKS, os.path.sep)) if root else LOCKS
     if not os.path.exists(locks):
@@ -2265,7 +2191,7 @@ def clean_locks(root=None):
     return out
 
 
-def unhold(name=None, pkgs=None, root=None, **kwargs):
+def unhold(name=None, pkgs=None, root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 3003
 
@@ -2334,7 +2260,7 @@ def unhold(name=None, pkgs=None, root=None, **kwargs):
     return ret
 
 
-def hold(name=None, pkgs=None, root=None, **kwargs):
+def hold(name=None, pkgs=None, root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 3003
 
@@ -2383,9 +2309,7 @@ def hold(name=None, pkgs=None, root=None, **kwargs):
             ret[target]["changes"]["old"] = ""
             ret[target]["comment"] = f"Package {target} is now being held."
         else:
-            ret[target]["comment"] = "Package {} is already set to be held.".format(
-                target
-            )
+            ret[target]["comment"] = f"Package {target} is already set to be held."
 
     if added:
         __zypper__(root=root).call("al", *added)
@@ -2579,9 +2503,7 @@ def _get_installed_patterns(root=None):
         if line.startswith("pattern() = ") and not _pattern_name(line).startswith(".")
     }
 
-    patterns = {
-        k: v for k, v in _get_visible_patterns(root=root).items() if v["installed"]
-    }
+    patterns = {k: v for k, v in _get_visible_patterns(root=root).items() if v["installed"]}
 
     for pattern in installed_patterns:
         if pattern not in patterns:
@@ -2692,7 +2614,7 @@ def search(criteria, refresh=False, **kwargs):
 
         salt '*' pkg.search <criteria>
     """
-    ALLOWED_SEARCH_OPTIONS = {
+    ALLOWED_SEARCH_OPTIONS = {  # pylint: disable=invalid-name
         "provides": "--provides",
         "recommends": "--recommends",
         "requires": "--requires",
@@ -2725,17 +2647,13 @@ def search(criteria, refresh=False, **kwargs):
             cmd.append(ALLOWED_SEARCH_OPTIONS.get(opt))
 
     cmd.append(criteria)
-    solvables = (
-        __zypper__(root=root)
-        .nolock.noraise.xml.call(*cmd)
-        .getElementsByTagName("solvable")
-    )
+    solvables = __zypper__(root=root).nolock.noraise.xml.call(*cmd).getElementsByTagName("solvable")
     if not solvables:
         raise CommandExecutionError(f"No packages found matching '{criteria}'")
 
     out = {}
     for solvable in solvables:
-        out[solvable.getAttribute("name")] = dict()
+        out[solvable.getAttribute("name")] = {}
         for k, v in solvable.attributes.items():
             out[solvable.getAttribute("name")][k] = v
 
@@ -2784,25 +2702,23 @@ def list_products(all=False, refresh=False, root=None):
     if refresh:
         refresh_db(root)
 
-    ret = list()
-    OEM_PATH = "/var/lib/suseRegister/OEM"
+    ret = []
+    oem_path = "/var/lib/suseRegister/OEM"
     if root:
-        OEM_PATH = os.path.join(root, os.path.relpath(OEM_PATH, os.path.sep))
-    cmd = list()
+        oem_path = os.path.join(root, os.path.relpath(oem_path, os.path.sep))
+    cmd = []
     if not all:
         cmd.append("--disable-repositories")
     cmd.append("products")
     if not all:
         cmd.append("-i")
 
-    product_list = (
-        __zypper__(root=root).nolock.xml.call(*cmd).getElementsByTagName("product-list")
-    )
+    product_list = __zypper__(root=root).nolock.xml.call(*cmd).getElementsByTagName("product-list")
     if not product_list:
         return ret  # No products found
 
     for prd in product_list[0].getElementsByTagName("product"):
-        p_nfo = dict()
+        p_nfo = {}
         for k_p_nfo, v_p_nfo in prd.attributes.items():
             if k_p_nfo in ["isbase", "installed"]:
                 p_nfo[k_p_nfo] = bool(v_p_nfo in ["true", "1"])
@@ -2822,12 +2738,10 @@ def list_products(all=False, refresh=False, root=None):
             ]
         )
         if "productline" in p_nfo and p_nfo["productline"]:
-            oem_file = os.path.join(OEM_PATH, p_nfo["productline"])
+            oem_file = os.path.join(oem_path, p_nfo["productline"])
             if os.path.isfile(oem_file):
                 with salt.utils.files.fopen(oem_file, "r") as rfile:
-                    oem_release = salt.utils.stringutils.to_unicode(
-                        rfile.readline()
-                    ).strip()
+                    oem_release = salt.utils.stringutils.to_unicode(rfile.readline()).strip()
                     if oem_release:
                         p_nfo["release"] = oem_release
         ret.append(p_nfo)
@@ -2883,19 +2797,15 @@ def download(*packages, **kwargs):
     if pkg_ret:
         failed = [pkg for pkg in packages if pkg not in pkg_ret]
         if failed:
-            pkg_ret["_error"] = (
-                "The following package(s) failed to download: {}".format(
-                    ", ".join(failed)
-                )
+            pkg_ret["_error"] = "The following package(s) failed to download: {}".format(
+                ", ".join(failed)
             )
         return pkg_ret
 
-    raise CommandExecutionError(
-        "Unable to download packages: {}".format(", ".join(packages))
-    )
+    raise CommandExecutionError("Unable to download packages: {}".format(", ".join(packages)))
 
 
-def list_downloaded(root=None, **kwargs):
+def list_downloaded(root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 2017.7.0
 
@@ -2910,12 +2820,12 @@ def list_downloaded(root=None, **kwargs):
 
         salt '*' pkg.list_downloaded
     """
-    CACHE_DIR = "/var/cache/zypp/packages/"
+    cache_dir = "/var/cache/zypp/packages/"
     if root:
-        CACHE_DIR = os.path.join(root, os.path.relpath(CACHE_DIR, os.path.sep))
+        cache_dir = os.path.join(root, os.path.relpath(cache_dir, os.path.sep))
 
     ret = {}
-    for root, dirnames, filenames in salt.utils.path.os_walk(CACHE_DIR):
+    for root, _, filenames in salt.utils.path.os_walk(cache_dir):
         for filename in fnmatch.filter(filenames, "*.rpm"):
             package_path = os.path.join(root, filename)
             pkg_info = __salt__["lowpkg.bin_pkg_info"](package_path)
@@ -2924,9 +2834,7 @@ def list_downloaded(root=None, **kwargs):
                 "path": package_path,
                 "size": os.path.getsize(package_path),
                 "creation_date_time_t": pkg_timestamp,
-                "creation_date_time": datetime.datetime.utcfromtimestamp(
-                    pkg_timestamp
-                ).isoformat(),
+                "creation_date_time": datetime.datetime.utcfromtimestamp(pkg_timestamp).isoformat(),
             }
     return ret
 
@@ -2954,7 +2862,7 @@ def diff(*paths, **kwargs):
     for pth in paths:
         pth_pkg = __salt__["lowpkg.owner"](pth, **kwargs)
         if not pth_pkg:
-            ret[pth] = os.path.exists(pth) and "Not managed" or "N/A"
+            ret[pth] = "Not managed" if os.path.exists(pth) else "N/A"
         else:
             if pkg_to_paths.get(pth_pkg) is None:
                 pkg_to_paths[pth_pkg] = []
@@ -2964,10 +2872,7 @@ def diff(*paths, **kwargs):
         local_pkgs = __salt__["pkg.download"](*pkg_to_paths.keys(), **kwargs)
         for pkg, files in pkg_to_paths.items():
             for path in files:
-                ret[path] = (
-                    __salt__["lowpkg.diff"](local_pkgs[pkg]["path"], path)
-                    or "Unchanged"
-                )
+                ret[path] = __salt__["lowpkg.diff"](local_pkgs[pkg]["path"], path) or "Unchanged"
 
     return ret
 
@@ -2978,9 +2883,7 @@ def _get_patches(installed_only=False, root=None):
     """
     patches = {}
     for element in (
-        __zypper__(root=root)
-        .nolock.xml.call("se", "-t", "patch")
-        .getElementsByTagName("solvable")
+        __zypper__(root=root).nolock.xml.call("se", "-t", "patch").getElementsByTagName("solvable")
     ):
         installed = element.getAttribute("status") == "installed"
         if (installed_only and installed) or not installed_only:
@@ -2992,7 +2895,7 @@ def _get_patches(installed_only=False, root=None):
     return patches
 
 
-def list_patches(refresh=False, root=None, **kwargs):
+def list_patches(refresh=False, root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 2017.7.0
 
@@ -3018,7 +2921,7 @@ def list_patches(refresh=False, root=None, **kwargs):
     return _get_patches(root=root)
 
 
-def list_installed_patches(root=None, **kwargs):
+def list_installed_patches(root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 2017.7.0
 
@@ -3036,7 +2939,7 @@ def list_installed_patches(root=None, **kwargs):
     return _get_patches(installed_only=True, root=root)
 
 
-def list_provides(root=None, **kwargs):
+def list_provides(root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 2018.3.0
 
@@ -3058,7 +2961,7 @@ def list_provides(root=None, **kwargs):
         if root:
             cmd.extend(["--root", root])
         cmd.extend(["-qa", "--queryformat", "%{PROVIDES}_|-%{NAME}\n"])
-        ret = dict()
+        ret = {}
         for line in __salt__["cmd.run"](
             cmd, output_loglevel="trace", python_shell=False
         ).splitlines():
@@ -3067,7 +2970,7 @@ def list_provides(root=None, **kwargs):
             if provide == realname:
                 continue
             if provide not in ret:
-                ret[provide] = list()
+                ret[provide] = []
             ret[provide].append(realname)
 
         __context__["pkg.list_provides"] = ret
@@ -3109,7 +3012,7 @@ def resolve_capabilities(pkgs, refresh=False, root=None, **kwargs):
     if refresh:
         refresh_db(root)
 
-    ret = list()
+    ret = []
     for pkg in pkgs:
         if isinstance(pkg, dict):
             name = next(iter(pkg))
@@ -3141,7 +3044,7 @@ def resolve_capabilities(pkgs, refresh=False, root=None, **kwargs):
     return ret
 
 
-def services_need_restart(root=None, **kwargs):
+def services_need_restart(root=None, **kwargs):  # pylint: disable=unused-argument
     """
     .. versionadded:: 3003
 
